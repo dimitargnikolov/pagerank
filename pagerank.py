@@ -67,6 +67,7 @@ def pagerank_iteration(nodes, no_outlinks_nodes, inlinks, outlinks, old_pagerank
 	else:
 		raise ValueError('Invalid number of threads.')
 
+	prs = list(prs)
 	assert len(nodes) == len(prs)
 	return {nodes[i]: prs[i] for i in range(len(prs))}
 
@@ -116,8 +117,8 @@ def parse_args():
 		description='Compute the pageranks of the nodes in a directed, unweighted graph.',
 		formatter_class=argparse.ArgumentDefaultsHelpFormatter
 	)
-	parser.add_argument('graph_file', type=file, help='The path to a graph in NetworkX adjacency list format.')
-	parser.add_argument('--damping', type=file, default=.85, help='The damping factor.')
+	parser.add_argument('graph_file', type=str, help='The path to a graph in NetworkX adjacency list format.')
+	parser.add_argument('--damping', type=float, default=.85, help='The damping factor.')
 	parser.add_argument('--delta', type=float, default=10 ** -4, help='The cumulative change in PR between two iterations that is acceptable for terminating the algorithm. The smaller the number, the better convergence, but the more iterations it will take.')
 	parser.add_argument('--num_threads', type=int, default=1, help='The number of threads to use for the computation.DO NOT USE. This actually makes the code slower.')
 	parser.add_argument('--undirected', action='store_true', help='Treat the graph as undirected.')
@@ -147,7 +148,8 @@ def write_output(prs, sort):
 if __name__ == '__main__':
 	args = parse_args()
 	
-	inlinks, outlinks = read_adj_graph(args.graph_file)
+	with open(args.graph_file, 'r') as f:
+		inlinks, outlinks = read_adj_graph(f)
 	if args.undirected:
 		links = undirected_graph(inlinks, outlinks)
 		prs = pagerank(links, links, args.damping, args.delta, args.num_threads)
