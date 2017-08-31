@@ -1,5 +1,5 @@
-import logging, argparse
-from multiprocessing import Pool
+import logging, argparse, math
+from multiprocessing.dummy import Pool
 from operator import itemgetter
 
 
@@ -32,18 +32,27 @@ def read_adj_graph(f):
     return inlinks, outlinks
 
 
-def node_pagerank(node, N, inlinks, outlinks, old_pageranks, dangling_sum, d):
-    nghbr_sum = 0
-    if node in inlinks:
-        for nghbr in inlinks[node]:
-            nghbr_sum += old_pageranks[nghbr] / len(outlinks[nghbr])
-    nghbr_sum += dangling_sum
-    pr = (1 - d) / N + d * nghbr_sum
-    return pr
+def chunks(l, n):
+    '''Yield successive n-sized chunks from l.'''
+    for i in range(0, len(l), n):
+        yield l[i:i + n]
+
+
+def nodes_pagerank(nodes, N, inlinks, outlinks, old_pageranks, dangling_sum, d):
+    prs = {}
+    for node in nodes:
+        nghbr_sum = 0
+        if node in inlinks:
+            for nghbr in inlinks[node]:
+                nghbr_sum += old_pageranks[nghbr] / len(outlinks[nghbr])
+        nghbr_sum += dangling_sum
+        pr = (1 - d) / N + d * nghbr_sum
+        prs[node] = pr
+    return prs
 
 
 def mapper(args):
-    return node_pagerank(*args)
+    return nodes_pagerank(*args)
 
 
 def pagerank_iteration(nodes, no_outlinks_nodes, inlinks, outlinks, old_pageranks, d, num_threads):
@@ -52,23 +61,23 @@ def pagerank_iteration(nodes, no_outlinks_nodes, inlinks, outlinks, old_pagerank
     dangling_sum = 0
     for node in no_outlinks_nodes:
         dangling_sum += old_pageranks[node] / len(nodes)
-
-    data = [
-        (node, len(nodes), inlinks, outlinks, old_pageranks, dangling_sum, d)
-        for node in nodes
-    ]
     
     if num_threads == 1:
-        prs = map(mapper, data)
+        prs = nodes_pagerank(nodes, len(nodes), inlinks, outlinks, old_pageranks, dangling_sum, d)
     elif num_threads > 1:
+        data = []
+        for chunk in chunks(nodes, math.ceil(len(nodes) / num_threads)):
+            data.append((chunk, len(nodes), inlinks, outlinks, old_pageranks, dangling_sum, d))
+
         pool = Pool(processes=num_threads)
-        prs = pool.map(mapper, data)
+        results = pool.map(mapper, data)
+        prs = {}
+        for r in results:
+            prs.update(r)
     else:
         raise ValueError('Invalid number of threads.')
 
-    prs = list(prs)
-    assert len(nodes) == len(prs)
-    return {nodes[i]: prs[i] for i in range(len(prs))}
+    return prs
 
 
 def pagerank(inlinks, outlinks, d, target_delta, num_threads):
@@ -142,6 +151,7 @@ def write_output(prs, sort):
         
     for node, pr in output:
         print('%s\t%f' % (node, pr))
+        pass
 
 
 if __name__ == '__main__':
