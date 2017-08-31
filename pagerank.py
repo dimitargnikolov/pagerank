@@ -132,7 +132,7 @@ def parse_args():
     parser.add_argument('graph_file', type=str, help='The path to a graph in NetworkX adjacency list format.')
     parser.add_argument('--damping', type=float, default=.85, help='The damping factor.')
     parser.add_argument('--delta', type=float, default=10 ** -4, help='The cumulative change in PR between two iterations that is acceptable for terminating the algorithm. The smaller the number, the better convergence, but the more iterations it will take.')
-    parser.add_argument('--num_threads', type=int, default=1, help='The number of threads to use for the computation.DO NOT USE. This actually makes the code slower.')
+    parser.add_argument('--num_threads', type=int, default=1, help='The number of threads to use for the computation.')
     parser.add_argument('--undirected', action='store_true', help='Treat the graph as undirected.')
     parser.add_argument('--sort', action='store_true', help='Store the output by pagerank in decreasing order.')
     parser.add_argument('--debug', action='store_true', help='Display debug messages.')
