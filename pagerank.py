@@ -1,5 +1,5 @@
 import logging, argparse, math
-from multiprocessing.dummy import Pool
+from multiprocessing import Pool
 from operator import itemgetter
 
 
@@ -38,7 +38,9 @@ def chunks(l, n):
         yield l[i:i + n]
 
 
-def nodes_pagerank(nodes, N, inlinks, outlinks, old_pageranks, dangling_sum, d):
+def nodes_pagerank(nodes, N, old_pageranks, dangling_sum):
+    global inlinks, outlinks, d
+
     prs = {}
     for node in nodes:
         nghbr_sum = 0
@@ -55,7 +57,9 @@ def mapper(args):
     return nodes_pagerank(*args)
 
 
-def pagerank_iteration(nodes, no_outlinks_nodes, inlinks, outlinks, old_pageranks, d, num_threads):
+def pagerank_iteration(old_pageranks):
+    global inlinks, outlinks, nodes, no_outlinks_nodes, d, num_threads
+
     # this is the sum that needs to be added to each node for PR to equal to 1
     # needs to be recomputed each iteration, before computing each node's PR
     dangling_sum = 0
@@ -63,11 +67,11 @@ def pagerank_iteration(nodes, no_outlinks_nodes, inlinks, outlinks, old_pagerank
         dangling_sum += old_pageranks[node] / len(nodes)
     
     if num_threads == 1:
-        prs = nodes_pagerank(nodes, len(nodes), inlinks, outlinks, old_pageranks, dangling_sum, d)
+        prs = nodes_pagerank(nodes, len(nodes), old_pageranks, dangling_sum)
     elif num_threads > 1:
         data = []
         for chunk in chunks(nodes, math.ceil(len(nodes) / num_threads)):
-            data.append((chunk, len(nodes), inlinks, outlinks, old_pageranks, dangling_sum, d))
+            data.append((chunk, len(nodes), old_pageranks, dangling_sum))
 
         pool = Pool(processes=num_threads)
         results = pool.map(mapper, data)
@@ -80,10 +84,9 @@ def pagerank_iteration(nodes, no_outlinks_nodes, inlinks, outlinks, old_pagerank
     return prs
 
 
-def pagerank(inlinks, outlinks, d, target_delta, num_threads):
-    nodes = set(inlinks.keys()).union(set(outlinks.keys()))
-    no_outlinks_nodes = nodes - set(outlinks.keys())
-    nodes = list(nodes) # convert to a list to preserve the order
+def pagerank():
+    global inlinks, outlinks, d, target_delta, num_threads
+
     new_prs = {node: 1 / len(nodes) for node in nodes}
 
     delta = target_delta + 1
@@ -92,7 +95,7 @@ def pagerank(inlinks, outlinks, d, target_delta, num_threads):
         logging.debug('Starting iteration %d.' % iter_num)
         
         old_prs = new_prs
-        new_prs = pagerank_iteration(nodes, no_outlinks_nodes, inlinks, outlinks, old_prs, d, num_threads)
+        new_prs = pagerank_iteration(old_prs)
         delta = sum([abs(old_prs[node] - new_prs[node]) for node in nodes])
         iter_num += 1
 
@@ -102,7 +105,8 @@ def pagerank(inlinks, outlinks, d, target_delta, num_threads):
     return new_prs
 
 
-def undirected_graph(inlinks, outlinks):
+def undirected_graph():
+    global inlinks, outlinks
     links = {}
 
     def add_links(links, links_to_add):
@@ -154,15 +158,29 @@ def write_output(prs, sort):
         pass
 
 
+inlinks, outlinks = {}, {}
+no_outlinks_nodes = set()
+nodes = []
+d, num_threads, target_delta = 0, 0, 0
+
 if __name__ == '__main__':
     args = parse_args()
-    
+
     with open(args.graph_file, 'r') as f:
         inlinks, outlinks = read_adj_graph(f)
     if args.undirected:
         links = undirected_graph(inlinks, outlinks)
-        prs = pagerank(links, links, args.damping, args.delta, args.num_threads)
-    else:
-        prs = pagerank(inlinks, outlinks, args.damping, args.delta, args.num_threads)
+        inlinks = links
+        outlinks = links
+
+    nodes = set(inlinks.keys()).union(set(outlinks.keys()))
+    no_outlinks_nodes = nodes - set(outlinks.keys())
+    nodes = list(nodes) # convert to a list to preserve the order
+
+    d = args.damping
+    target_delta = args.delta
+    num_threads = args.num_threads
+
+    prs = pagerank()
 
     write_output(prs, args.sort)
